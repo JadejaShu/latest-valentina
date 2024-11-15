@@ -40,8 +40,13 @@ async def index_files(bot, query):
     ]])
     await msg.edit("Indexing is started ✨", reply_markup=button)
     logger.info(f"Started indexing for chat: {chat} up to message ID: {lst_msg_id}")
-try: chat = int(chat)
-    except: chat = chat
+    
+    try:
+        chat = int(chat)
+    except ValueError:  # Catch only specific exceptions
+        logger.warning(f"Chat ID is not an integer: {chat}")
+        chat = chat  # Leave chat as a string if it's not an integer
+    
     await index_files_to_db(int(lst_msg_id), chat, msg, bot)
 
 
