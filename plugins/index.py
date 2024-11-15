@@ -26,7 +26,7 @@ async def media(bot, message):
 
 @Client.on_callback_query(filters.regex(r'^index'))
 async def index_files(bot, query):
-        logger.info(f"Received callback query: {query.data}")
+    logger.info(f"Received callback query: {query.data}")
     if query.data.startswith('index_cancel'):
         temp.CANCEL = True
         return await query.answer("Cᴀɴᴄᴇʟʟɪɴɢ Iɴᴅᴇxɪɴɢ", show_alert=True)
