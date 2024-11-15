@@ -6,6 +6,7 @@ from info import CHANNELS, LOG_CHANNEL, ADMINS
 from database.ia_filterdb import save_file
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from utils import temp
+from concurrent.futures import ThreadPoolExecutor
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
