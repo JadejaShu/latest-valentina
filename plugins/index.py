@@ -97,23 +97,19 @@ async def index_files_to_db(lst_msg_id, chat, msg, bot):
     no_media = 0
     unsupported = 0
     processed = 0
-    batch_size = 100  # Number of messages after which progress will be reported
+    batch_size = 100  # Number of messages processed before reporting progress
+    update_interval = 10  # Update message every 'update_interval' processed messages
 
     async with lock:
         try:
             current = temp.CURRENT
             temp.CANCEL = False
+            # Start processing messages
             async for message in bot.iter_messages(chat, lst_msg_id, temp.CURRENT):
                 processed += 1
                 if temp.CANCEL:
-                    await msg.edit(
-                        f"Indexing Cancelled!\n\n"
-                        f"Files Saved: <code>{total_files}</code>\n"
-                        f"Duplicate Files: <code>{duplicate}</code>\n"
-                        f"Deleted Messages: <code>{deleted}</code>\n"
-                        f"Non-Media Skipped: <code>{no_media + unsupported}</code>\n"
-                        f"Errors: <code>{errors}</code>"
-                    )
+                    # User cancelled the operation
+                    await msg.edit(f"Indexing Cancelled! Processed {processed} messages.")
                     break
 
                 if message.empty:
@@ -145,25 +141,12 @@ async def index_files_to_db(lst_msg_id, chat, msg, bot):
                 except Exception as e:
                     logger.error(f"Error saving media: {e}")
                     errors += 1
-                    continue
 
-                # Update progress every `batch_size` messages
-                if processed % batch_size == 0:
-                    progress_msg = (
-                        f"Processed Messages: <code>{processed}</code>\n"
-                        f"Files Saved: <code>{total_files}</code>\n"
-                        f"Duplicate Files: <code>{duplicate}</code>\n"
-                        f"Deleted Messages: <code>{deleted}</code>\n"
-                        f"Non-Media Skipped: <code>{no_media + unsupported}</code>\n"
-                        f"Errors: <code>{errors}</code>"
-                    )
-                    try:
-                        await msg.edit_text(progress_msg, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('Cancel', callback_data='index_cancel')]]))
-                    except FloodWait as t:
-                        await asyncio.sleep(t.value)
-                        await msg.edit_text(progress_msg, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('Cancel', callback_data='index_cancel')]]))
+                # Update progress message every 'update_interval' messages
+                if processed % update_interval == 0:
+                    await update_progress(msg, processed, total_files, duplicate, deleted, no_media, unsupported, errors)
 
-            # Final statistics
+            # Final message after processing
             await msg.edit(
                 f"Indexing Completed!\n\n"
                 f"Processed Messages: <code>{processed}</code>\n"
@@ -177,3 +160,30 @@ async def index_files_to_db(lst_msg_id, chat, msg, bot):
         except Exception as e:
             logger.exception(f"Unexpected error: {e}")
             await msg.edit(f"Error during indexing: <code>{e}</code>")
+
+async def update_progress(msg, processed, total_files, duplicate, deleted, no_media, unsupported, errors):
+    try:
+        # Add Cancel Button to the progress message
+        cancel_button = InlineKeyboardMarkup([
+            [InlineKeyboardButton('🚫 Cancel', callback_data='index_cancel')]
+        ])
+        await msg.edit(
+            f"Indexing in Progress...\n\n"
+            f"Processed Messages: <code>{processed}</code>\n"
+            f"Files Saved: <code>{total_files}</code>\n"
+            f"Duplicate Files: <code>{duplicate}</code>\n"
+            f"Deleted Messages: <code>{deleted}</code>\n"
+            f"Non-Media Skipped: <code>{no_media + unsupported}</code>\n"
+            f"Errors: <code>{errors}</code>",
+            reply_markup=cancel_button
+        )
+    except FloodWait as t:
+        await asyncio.sleep(t.value)
+        await update_progress(msg, processed, total_files, duplicate, deleted, no_media, unsupported, errors)
+
+@Client.on_callback_query(filters.regex(r'^index_cancel'))
+async def cancel_indexing(bot, query):
+    # Set the cancel flag to true to stop the indexing process
+    temp.CANCEL = True
+    await query.answer("Indexing Process Cancelled!", show_alert=True)
+    await query.message.edit("Indexing has been cancelled by the user.")
